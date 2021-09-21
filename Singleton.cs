@@ -2,33 +2,64 @@ using UnityEngine;
 
 namespace Ogsn.Utils
 {
+    /// <summary>
+    /// Inherit from this base class to create a singleton.
+    /// e.g. public class MyClassName : SingletonMonoBehaviour<MyClassName> {}
+    /// ref: http://wiki.unity3d.com/index.php/Singleton
+    /// </summary>
     public class SingletonMonoBehaviour<T> : MonoBehaviour where T : MonoBehaviour
     {
+        // Check to see if we're about to be destroyed.
+        private static bool _shuttingDown = false;
+        private static object _lock = new object();
         private static T _instance;
 
+        /// <summary>
+        /// Access singleton instance through this propriety.
+        /// </summary>
         public static T Instance
         {
             get
             {
-                if (_instance == null)
+                if (_shuttingDown)
                 {
-                    _instance = (T)FindObjectOfType(typeof(T));
+                    Debug.LogWarning($"[Singleton] Instance '{typeof(T)}' already destroyed. Returning null.");
+                    return null;
                 }
-                return _instance;
+
+                lock (_lock)
+                {
+                    if (_instance == null)
+                    {
+                        // Search for existing instance.
+                        _instance = (T)FindObjectOfType(typeof(T));
+
+                        // Create new instance if one doesn't already exist.
+                        if (_instance == null)
+                        {
+                            // Need to create a new GameObject to attach the singleton to.
+                            var singletonObject = new GameObject();
+                            _instance = singletonObject.AddComponent<T>();
+                            singletonObject.name = typeof(T).ToString() + " (Singleton)";
+
+                            // Make instance persistent.
+                            DontDestroyOnLoad(singletonObject);
+                        }
+                    }
+
+                    return _instance;
+                }
             }
         }
-    }
 
-    public class DontDestroySingletonMonoBehaviour<T> : SingletonMonoBehaviour<T> where T : SingletonMonoBehaviour<T>
-    {
-        public void Awake()
+        private void OnApplicationQuit()
         {
-            if (this != Instance)
-            {
-                Destroy(gameObject);
-                return;
-            }
-            DontDestroyOnLoad(transform.root.gameObject);
+            _shuttingDown = true;
+        }
+
+        private void OnDestroy()
+        {
+            _shuttingDown = true;
         }
     }
 }
